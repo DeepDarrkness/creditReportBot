@@ -33,7 +33,7 @@ def init_openai_client():
         st.stop()
 
 try:
-    client = init_openai_client()
+    openai_client = init_openai_client()
     #non-blocking toast notification
     st.toast("Connected to Chat Model successfully", icon="✅")
 except Exception as e:
@@ -49,7 +49,7 @@ def init_mistral_client():
         st.error(f"Failed to initialize Mistral client: {e}")
         st.stop()
 try:
-    client = init_mistral_client()
+    mistral_client = init_mistral_client()
     st.toast("Connected to OCR Model successfully", icon="✅")
 except Exception as e:
     st.error(f"Failed to initialize Mistral client: {e}")
@@ -62,7 +62,7 @@ async def get_streaming_response(messages):
     message_placeholder = st.empty()
     
     try:
-        stream = await client.chat.completions.create(
+        stream = await openai_client.chat.completions.create(
             model=Settings.AZURE_OPENAI_DEPLOYMENT_ID,
             messages=messages,
             stream=True
@@ -101,7 +101,7 @@ if uploaded_file is not None:
             base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
 
             st.write("Sending OCR request to Mistral...")
-            ocr_response = client.ocr.process(
+            ocr_response = mistral_client.ocr.process(
                 model="mistral-ocr-latest",
                 document={
                     "type": "document_url",
@@ -131,8 +131,13 @@ if "messages" not in st.session_state:
 if "system_prompt" not in st.session_state:
     st.session_state.system_prompt = {
     "role": "system", 
-    "content": "You are a financial assistant. Guide the user to upload  a credit report. Analyze the credit report and provide insights."
+    "content": """You are a financial assistant. Guide the user to upload a credit report. Analyze the credit report and provide insights.
+                Do not help the user with anything else. Do not output code. And bring the conversation back to credit analysis if user
+                goes on in a different transcript."""
 }
+if "credit_report" not in st.session_state:
+    st.session_state.credit_report = ""
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -149,13 +154,24 @@ if prompt := st.chat_input("Ask any question..."):
     if "credit_report" in st.session_state:            #credit report truncated to 4000 chars
         messages.append({                              
             "role": "system",
-            "content": f"Credit report markdown:\n\n{st.session_state.credit_report[:4000]}"
+            "content": f"Credit report markdown:\n\n{st.session_state.credit_report[:16000]}"     #16000 char is roughly 4000 tokens
         })
     with st.chat_message("assistant"):
-        messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
         full_response = asyncio.run(get_streaming_response(messages))
     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 if st.sidebar.button("Clear Chat"):
     st.session_state.messages = []
+    st.session_state.credit_report = ""
+    st.rerun()
+
+if st.sidebar.button("Download Markdown"):
+    with open("credit_report.md", "w") as f:
+        f.write(st.session_state.credit_report)
+    st.download_button(
+        "Download Markdown",
+        data=st.session_state.credit_report,
+        file_name="./md/credit_report.md",
+        mime="text/markdown"
+    )
     st.rerun()
