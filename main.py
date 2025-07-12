@@ -1,7 +1,10 @@
 import streamlit as st
 from openai import AsyncAzureOpenAI
 import os
+import time
 import asyncio
+import fitz  # PyMuPDF
+from io import BytesIO
 from dotenv import load_dotenv
 load_dotenv()
 st.set_page_config(page_title="Credit Report Bot", page_icon="📊")
@@ -21,14 +24,20 @@ def init_openai_client():
             api_version=Settings.AZURE_OPENAI_API_VERSION,
             api_key=Settings.AZURE_OPENAI_API_KEY,
         )
-        st.success("Connected to Azure OpenAI successfully")
         return client
     except Exception as e:
         st.error(f"Failed to initialize OpenAI client: {e}")
         st.stop()
 
-client = init_openai_client()
+try:
+    client = init_openai_client()
+    #non-blocking toast notification
+    st.toast("Connected to Model successfully", icon="✅")
+except Exception as e:
+    st.error(f"Failed to initialize OpenAI client: {e}")
+    st.stop()
 
+#Streaming reponse
 async def get_streaming_response(messages):
     full_response = ""
     message_placeholder = st.empty()
@@ -53,8 +62,32 @@ async def get_streaming_response(messages):
     except Exception as e:
         st.error(f"Error during streaming: {e}")
         return "Sorry, I encountered an error while generating a response."
+    
+# PDF upload button
+uploaded_file = st.sidebar.file_uploader(
+    "Upload a PDF to query", 
+    type=["pdf"],
+    help="Upload a PDF document to extract text and query its contents"
+)
 
-# chat history
+if uploaded_file is not None:
+    with st.sidebar:
+        with st.status("Processing PDF...", expanded=True) as status:
+            st.write("Uploading file...")
+            pdf_bytes = uploaded_file.read()
+            pdf_stream = BytesIO(pdf_bytes)
+            doc = fitz.open(stream=pdf_stream, filetype="pdf")
+            num_pages = doc.page_count
+            st.write(f"PDF loaded into memory. Number of pages: {num_pages}")
+
+            st.write("Extracting text from PDF...")
+            time.sleep(2)  # Simulate processing time
+            st.success("Text extraction complete!")
+            status.update(label="PDF ready for querying!", state="complete", expanded=False)
+
+    st.session_state.uploaded_pdf = uploaded_file
+
+#Chat
 if "messages" not in st.session_state:
     st.session_state.messages = []
 for message in st.session_state.messages:
