@@ -1,12 +1,14 @@
 import logging
 import os
-from datetime import datetime
-from typing import Annotated
+from datetime import datetime, date
+from typing import Annotated, List, Dict, Literal, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 import aiofiles 
+from data.datastring import json_string
+import json
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +44,29 @@ class PDFProcessingResult(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+class Transaction(BaseModel):
+    transaction_date: str # DD-MM-YYYY string for now
+    amount: Optional[float] = None   # INR is float for now
+    narration: str
+    month_bucket: Literal["1-7", "8-14", "15-21", "22-EOM"]
+    balance: Optional[float] = None
+
+class CreditCategory(BaseModel):
+    salary_credit: List[Transaction]
+    loan_amount_credit: List[Transaction] = []
+    internal_transfer: List[Transaction] = []
+    upi_received: List[Transaction] = []
+
+class MonthlyData(BaseModel):
+    credits: CreditCategory
+
+MonthName = Literal[
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+]
+class FinancialData(RootModel):
+    root: Dict[MonthName, MonthlyData]   #Dynamic MonthName
 
 async def save_upload_file(upload_file: UploadFile) -> str:
     """Save uploaded file to disk and return file path"""
@@ -90,6 +115,18 @@ async def save_upload_file(upload_file: UploadFile) -> str:
 #     result["processing_time_ms"] = processing_time
     
 #     return result
+
+
+@app.get("/test", include_in_schema=False)
+async def health_check():
+    return {"status": "Running"}
+
+@app.post("/bank-pdf", response_model=FinancialData)
+async def process_pdf(file: Annotated[UploadFile, File(description="PDF file of Bank Statement")]):
+    #Do nothing with PDF
+    data = json.loads(json_string)
+    financial_data = FinancialData.model_validate(data)  
+    return financial_data
 
 @app.post(
     "/process-pdf/",
@@ -158,12 +195,6 @@ async def process_pdf_endpoint(
             detail="An error occurred while processing the file"
         )
 
-# Health check endpoint
-@app.get("/test", include_in_schema=False)
-async def health_check():
-    return {"status": "Running"}
-
-# Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
