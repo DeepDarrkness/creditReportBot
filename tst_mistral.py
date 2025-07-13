@@ -17,7 +17,7 @@ def encode_pdf(pdf_path):
         print(f"Error: {e}")
         return None
 
-pdf_path = "./pdf/dilip.pdf"
+pdf_path = "./pdf/dinesh.pdf"
 
 base64_pdf = encode_pdf(pdf_path)
 
