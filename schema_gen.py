@@ -5,9 +5,10 @@ import base64
 from PIL import Image
 from io import BytesIO
 from openai import AsyncAzureOpenAI, OpenAIError
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel, RootModel, create_model
 import json
-from typing import Annotated, List, Dict, Literal, Optional
+from typing import Optional
+import datetime
 from data.datastring import md_string
 from dotenv import load_dotenv
 load_dotenv()
@@ -84,30 +85,105 @@ def extract_text_from_response(response) -> str:
     print(f"Extracted text length: {len(extracted_text)} characters.")
     return extracted_text
 
+def sanitize_name(field_name: str) -> str:
+    sanitized = ''.join(c if c.isalnum() else '_' for c in field_name)
+    sanitized = sanitized.lstrip('0123456789_')
+    if not sanitized:
+        sanitized = 'field'
+    return sanitized
+
+def convert_type(type_str: str) -> type:
+    type_map = {
+        'str': str,
+        'string': str,
+        'text': str,
+        'int': int,
+        'integer': int,
+        'float': float,
+        'number': float,
+        'decimal': float,
+        'bool': bool,
+        'boolean': bool
+    }
+    return type_map.get(type_str.lower().strip(), str)  # Default to string
+    
+def generate_model_from_json(json_spec: dict) -> type:
+    fields = {
+        sanitize_name(name): (Optional[convert_type(type_str)], None)
+        for name, type_str in json_spec.items()
+    }
+    
+    # Store original field mapping in model config
+    original_fields = {
+        sanitize_name(name): name 
+        for name in json_spec.keys()
+    }
+    
+    model = create_model(
+        'GenTransactionsModel',
+        __config__=type('Config', (), {
+            'extra': 'ignore',
+            'arbitrary_types_allowed': True,
+            'original_fields': original_fields
+        }),
+        **fields
+    )
+    
+    return model
+
+json_spec = {
+    "DATE": "string",
+    "MODE": "string",
+    "PARTICULARS": "string",
+    "DEPOSITS": "float",
+    "WITHDRAWALS": "float",
+    "BALANCE": "float"
+} 
+
+sample_json  = {
+    "DATE": "2023-01-15",
+    "MODE": "Transfer",
+    "PARTICULARS": "Salary",
+    "DEPOSITS": "1500.50",  # String that should be converted to float
+    "WITHDRAWALS": None,    # Missing value
+    "BALANCE": 2000.75
+}
+
+# if __name__ == "__main__":
+#     #load pdf
+#     base64_image = None
+#     try:
+#         with open("./pdf/dinesh.pdf", "rb") as f:
+#             pdf_bytes = f.read()
+#             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+#             num_pages = doc.page_count 
+#             print(f"Loaded PDF with {num_pages} pages")
+
+#             page = doc.load_page(0)  # First page
+#             pix = page.get_pixmap(matrix=fitz.Identity)
+#             img_bytes = pix.tobytes("png")
+#             base64_image = base64.b64encode(img_bytes).decode("utf-8")
+#         img_url = f"data:image/jpeg;base64,{base64_image}"
+#     except Exception as e:
+#         print(f"Failed to load PDF: {e}")
+#     if base64_image:
+#         try:
+#             openai_client = init_openai_client()
+#             print("Connected to Chat Model successfully")
+#         except Exception as e:
+#             print(f"Failed to initialize OpenAI client")
+
+#         json_string = asyncio.run(perform_ocr(openai_client, img_url))
+#         print(json_string)
+#         schema = json.loads(json_string)
+
 if __name__ == "__main__":
-    #load pdf
-    base64_image = None
     try:
-        with open("./pdf/dinesh.pdf", "rb") as f:
-            pdf_bytes = f.read()
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            num_pages = doc.page_count 
-            print(f"Loaded PDF with {num_pages} pages")
-
-            page = doc.load_page(0)  # First page
-            pix = page.get_pixmap(matrix=fitz.Identity)
-            img_bytes = pix.tobytes("png")
-            base64_image = base64.b64encode(img_bytes).decode("utf-8")
-        img_url = f"data:image/jpeg;base64,{base64_image}"
+        TransactionsModel = generate_model_from_json(json_spec)
+        print("Generated Pydantic model:")
+        print(TransactionsModel.schema_json(indent=2))
+        instance = TransactionsModel(**sample_json)
+        print("\nModel instance:", instance)
+        
     except Exception as e:
-        print(f"Failed to load PDF: {e}")
-    if base64_image:
-        try:
-            openai_client = init_openai_client()
-            print("Connected to Chat Model successfully")
-        except Exception as e:
-            print(f"Failed to initialize OpenAI client")
-
-        json_string = asyncio.run(perform_ocr(openai_client, img_url))
-        print(json_string)
-        schema = json.loads(json_string)
+        print(f"Error generating model: {e}")
