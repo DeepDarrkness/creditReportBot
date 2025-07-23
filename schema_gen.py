@@ -131,6 +131,27 @@ def generate_model_from_json(json_spec: dict) -> type:
     
     return model
 
+def get_simple_schema(model: type[BaseModel]) -> dict:
+    #Extract simplified schema with Python type names
+    type_map = {
+        "string": "str",
+        "number": "float",
+        "integer": "int",
+        "boolean": "bool"
+    }
+    
+    schema = model.model_json_schema()
+    simple_schema = {}
+    
+    for field_name, properties in schema["properties"].items():
+        json_type = next(
+            t["type"] for t in properties["anyOf"] 
+            if t["type"] != "null"
+        )
+        simple_schema[field_name] = type_map.get(json_type, json_type)
+    
+    return simple_schema
+
 json_spec = {
     "DATE": "string",
     "MODE": "string",
@@ -144,42 +165,41 @@ sample_json  = {
     "DATE": "2023-01-15",
     "MODE": "Transfer",
     "PARTICULARS": "Salary",
-    "DEPOSITS": "1500.50",  # String that should be converted to float
-    "WITHDRAWALS": None,    # Missing value
+    "DEPOSITS": "1500.50",  
+    "WITHDRAWALS": None,    
     "BALANCE": 2000.75
 }
 
-# if __name__ == "__main__":
-#     #load pdf
-#     base64_image = None
-#     try:
-#         with open("./pdf/dinesh.pdf", "rb") as f:
-#             pdf_bytes = f.read()
-#             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-#             num_pages = doc.page_count 
-#             print(f"Loaded PDF with {num_pages} pages")
-
-#             page = doc.load_page(0)  # First page
-#             pix = page.get_pixmap(matrix=fitz.Identity)
-#             img_bytes = pix.tobytes("png")
-#             base64_image = base64.b64encode(img_bytes).decode("utf-8")
-#         img_url = f"data:image/jpeg;base64,{base64_image}"
-#     except Exception as e:
-#         print(f"Failed to load PDF: {e}")
-#     if base64_image:
-#         try:
-#             openai_client = init_openai_client()
-#             print("Connected to Chat Model successfully")
-#         except Exception as e:
-#             print(f"Failed to initialize OpenAI client")
-
-#         json_string = asyncio.run(perform_ocr(openai_client, img_url))
-#         print(json_string)
-#         schema = json.loads(json_string)
-
 if __name__ == "__main__":
+    #load pdf
+    base64_image = None
     try:
-        TransactionsModel = generate_model_from_json(json_spec)
+        with open("./pdf/dinesh.pdf", "rb") as f:
+            pdf_bytes = f.read()
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            num_pages = doc.page_count 
+            print(f"Loaded PDF with {num_pages} pages")
+
+            page = doc.load_page(0)  # First page
+            pix = page.get_pixmap(matrix=fitz.Identity)
+            img_bytes = pix.tobytes("png")
+            base64_image = base64.b64encode(img_bytes).decode("utf-8")
+        img_url = f"data:image/jpeg;base64,{base64_image}"
+    except Exception as e:
+        print(f"Failed to load PDF: {e}")
+    if base64_image:
+        try:
+            openai_client = init_openai_client()
+            print("Connected to Chat Model successfully")
+        except Exception as e:
+            print(f"Failed to initialize OpenAI client")
+
+        json_string = asyncio.run(perform_ocr(openai_client, img_url))
+        print(json_string)
+        schema = json.loads(json_string)
+
+    try:
+        TransactionsModel = generate_model_from_json(schema)
         print("Generated Pydantic model:")
         print(TransactionsModel.schema_json(indent=2))
         instance = TransactionsModel(**sample_json)

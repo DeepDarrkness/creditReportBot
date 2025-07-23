@@ -2,4 +2,6 @@
 .env
 pdf/
 md/
+json/
+credit_report/
 __pycache__/

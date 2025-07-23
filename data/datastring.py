@@ -257,3 +257,31 @@ MR.MANIKANTA DINESH VAKAMUDI
 |  08-04-2025 |  | UPI/airtelcommonpoo/Payment from Ai/AIRTEL PAYMENTS/509817971266/APB1450FmMS04MTg3 LTF/YjIwYzZmNjE5MQ |  | 1,354.64 | 7,007.11  |
 
 """
+
+md_to_json_prompt = """"
+I have a markdown table that I want to convert into JSON. Based on the give schema and data, output the final JSON:
+JSON Schema:
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "DATE": { "type": ["string", "null"] },
+      "MODE": { "type": ["string", "null"] },
+      "CERTIFICATE": { "type": "string" },
+      "DEPOSITS": { "type": ["number", "null"] },
+      "WITHDRAWLS": { "type": ["number", "null"] },
+      "BALANCE": { "type": "number" }
+    },
+    "required": ["DATE", "CERTIFICATE", "BALANCE"]
+  }
+}
+Keep in mind that the certifate column has text overflow. Sometimes this column is named as particulars.
+Markdown table:
+|  DATE | MODE ${ }^{\text {a }}$ | PARTICULARS | DEPOSITS | WITHDRAWALS | BALANCE  |
+| --- | --- | --- | --- | --- | --- |
+|  02-04-2025 |  | UPI/Vyapar.17214179/Payment from Ph/HDFC BANK |  | 239.00 | 69,359.20  |
+|   |  | LTD/157004532337/AXL2ad258948f8245cebd7e564 a61fcd829/ |  |  |   |
+|  02-04-2025 |  | UPI/paytmq28100505/Payment from Ph/YES BANK |  | 40.00 | 69,319.20  |
+
+"""
