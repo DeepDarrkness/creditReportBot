@@ -73,9 +73,9 @@ if "system_prompt" not in st.session_state:
                - FOIR calculation
                - Payment history
                - Credit utilization 
-               Never calculate obligation from payslip. Only use payslip data for verifying salary data.
+               Never calculate obligations from payslip. Only use payslip data for verifying salary data.
                 Do not output code. Only ouput markdown. You can inline LaTeX formula use a single $ before and after the equation 
-                and use a double $ to display equationsKeep the conversation focused on credit analysis."""
+                and use a double $ to display equations."""
     }
 if "credit_report" not in st.session_state:
     st.session_state.credit_report = defaultdata.credit_report
@@ -84,34 +84,45 @@ if "bank_statement" not in st.session_state:
 if "pay_slip" not in st.session_state:
     st.session_state.pay_slip = defaultdata.pay_slip
 
-if prompt := st.chat_input("Ask any question..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+if "conversation_history" not in st.session_state:
+    st.session_state.conversation_history = []
 
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input and processing
+if prompt := st.chat_input("Ask any question..."):
+
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    messages = []
-    messages.append(st.session_state.system_prompt)    #system prompt
-    messages.extend(st.session_state.messages[-10:])   
+    messages = [st.session_state.system_prompt]
+    messages.extend(st.session_state.messages[-10:])
+
     if "credit_report" in st.session_state:            
-        messages.append({                              
+        messages.append({
             "role": "user",
-            "content": f"Credit report:\n\n{st.session_state.credit_report[:16000]}"     #16000 char is roughly 4000 tokens
+            "content": f"Credit report:\n\n{st.session_state.credit_report[:16000]}"
         })
     if "bank_statement" in st.session_state:            
-        messages.append({                              
-            "role": "user",
-            "content": f"Bank statement:\n\n{st.session_state.bank_statement[:16000]}"   
+        messages.append({
+            "role": "user", 
+            "content": f"Bank statement:\n\n{st.session_state.bank_statement[:16000]}"
         })  
     if "pay_slip" in st.session_state:            
-        messages.append({                              
+        messages.append({
             "role": "user",
-            "content": f"Pay slip:\n\n{st.session_state.pay_slip[:16000]}"     
+            "content": f"Pay slip:\n\n{st.session_state.pay_slip[:16000]}"
         })
-    
+
     with st.chat_message("assistant"):
         full_response = asyncio.run(get_streaming_response(messages))
+        st.markdown(full_response)
+
     st.session_state.messages.append({"role": "assistant", "content": full_response})
+
 
 if st.sidebar.button("Clear Chat"):
     st.session_state.messages = []
